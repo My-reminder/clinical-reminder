@@ -1,0 +1,125 @@
+import React, { useEffect, useState } from "react";
+import Layout from "../components/Layout";
+import { useApp } from "../context/AppContext";
+import { api } from "../lib/api";
+import { Users, UserCheck, Send, CalendarClock, AlertTriangle, Pill, Clock } from "lucide-react";
+import { format, parseISO } from "date-fns";
+
+const StatCard = ({ icon: Icon, label, value, accent, testId }) => (
+  <div
+    data-testid={testId}
+    className="card-hover bg-clinic-surface border border-clinic-border rounded-2xl p-6"
+  >
+    <div className="flex items-start justify-between">
+      <div>
+        <div className="text-sm uppercase tracking-[0.15em] text-clinic-muted font-medium">{label}</div>
+        <div className="font-heading text-4xl font-bold text-clinic-text mt-3">{value}</div>
+      </div>
+      <div
+        className={`w-10 h-10 rounded-xl flex items-center justify-center ${
+          accent === "warn" ? "bg-[#FBEAE6] text-clinic-warning" : "bg-clinic-tint text-clinic-primary"
+        }`}
+      >
+        <Icon className="w-5 h-5" strokeWidth={1.8} />
+      </div>
+    </div>
+  </div>
+);
+
+const Dashboard = () => {
+  const { t, user, lang } = useApp();
+  const [stats, setStats] = useState(null);
+  const [upcoming, setUpcoming] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  const load = async () => {
+    try {
+      const [s, u] = await Promise.all([api.get("/stats"), api.get("/reminders/upcoming")]);
+      setStats(s.data);
+      setUpcoming(u.data);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    load();
+  }, []);
+
+  return (
+    <Layout>
+      <div className="max-w-7xl mx-auto">
+        <div className="mb-10">
+          <div className="text-sm uppercase tracking-[0.2em] text-clinic-muted mb-2">{t("overview")}</div>
+          <h1 className="font-heading text-4xl sm:text-5xl font-bold text-clinic-text tracking-tight">
+            {t("welcome")}, {user?.name?.split(" ")[0] || ""}
+          </h1>
+          <p className="text-base text-clinic-muted mt-3">{t("manage")}</p>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-10">
+          <StatCard testId="stat-total" icon={Users} label={t("total_patients")} value={stats?.total_patients ?? "–"} />
+          <StatCard testId="stat-active" icon={UserCheck} label={t("active_patients")} value={stats?.active_patients ?? "–"} />
+          <StatCard testId="stat-sent" icon={Send} label={t("sent_today")} value={stats?.reminders_sent_today ?? "–"} />
+          <StatCard testId="stat-scheduled" icon={CalendarClock} label={t("scheduled_today")} value={stats?.reminders_scheduled_today ?? "–"} />
+        </div>
+
+        {stats?.reminders_failed_today > 0 && (
+          <div
+            data-testid="failed-alert"
+            className="mb-8 p-4 rounded-2xl border border-clinic-warning/30 bg-[#FBEAE6] flex items-center gap-3"
+          >
+            <AlertTriangle className="w-5 h-5 text-clinic-warning flex-shrink-0" />
+            <div className="text-sm text-clinic-text">
+              {stats.reminders_failed_today} {t("failed_today")}. Check Reminders tab for details.
+            </div>
+          </div>
+        )}
+
+        {/* Upcoming */}
+        <div className="bg-clinic-surface border border-clinic-border rounded-2xl overflow-hidden">
+          <div className="p-6 border-b border-clinic-border flex items-center justify-between">
+            <h2 className="font-heading text-2xl font-semibold text-clinic-text">{t("upcoming")}</h2>
+            <CalendarClock className="w-5 h-5 text-clinic-muted" />
+          </div>
+          {loading ? (
+            <div className="p-10 text-center text-clinic-muted text-sm">Loading...</div>
+          ) : upcoming.length === 0 ? (
+            <div className="p-10 text-center text-clinic-muted text-sm" data-testid="no-upcoming">{t("no_upcoming")}</div>
+          ) : (
+            <div className="divide-y divide-clinic-border">
+              {upcoming.slice(0, 10).map((r, i) => (
+                <div key={i} data-testid={`upcoming-item-${i}`} className="p-5 flex items-center gap-4 hover:bg-clinic-tint/40 transition">
+                  <div className="w-11 h-11 rounded-xl bg-clinic-tint flex items-center justify-center flex-shrink-0">
+                    <Pill className="w-5 h-5 text-clinic-primary" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="font-medium text-clinic-text truncate">
+                      {r.patient_name} · <span className="text-clinic-muted font-normal">{r.medicine}</span>
+                    </div>
+                    <div className="text-xs text-clinic-muted mt-1 flex items-center gap-2 flex-wrap">
+                      <Clock className="w-3 h-3" />
+                      {format(parseISO(r.when_iso), "EEE, MMM d · HH:mm")}
+                      {r.empty_stomach && (
+                        <span className="px-2 py-0.5 rounded-full bg-clinic-secondary/30 text-[10px] uppercase tracking-wider">
+                          {t("empty_stomach_yes")}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="text-xs uppercase tracking-wider text-clinic-muted hidden sm:block">
+                    {r.language === "hi" ? "हिं" : "EN"}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </Layout>
+  );
+};
+
+export default Dashboard;
