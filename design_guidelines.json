@@ -1,0 +1,87 @@
+{
+  "theme_strategy": {
+    "theme": "Light",
+    "archetype": "Archetype 1 (Organic & Earthy)",
+    "mood": "Trustworthy, calm, clean medical tech, highly user-friendly",
+    "reasoning": "A clinical reminder app needs to feel reliable but not sterile. Using an Organic & Earthy archetype with sage greens and bone whites creates a calming environment that reduces cognitive load for clinic staff while maintaining a highly professional appearance."
+  },
+  "colors": {
+    "background": "#FDFDF9",
+    "surface": "#FFFFFF",
+    "primary": "#4A5D4E",
+    "primary_hover": "#3B4A3E",
+    "secondary": "#D4C3B3",
+    "accent_warning": "#C86A58",
+    "text_main": "#1F2924",
+    "text_muted": "#5C6B62",
+    "border": "#E5E9E6"
+  },
+  "typography": {
+    "heading_font": "Manrope",
+    "body_font": "Work Sans",
+    "hierarchy": {
+      "h1": "text-4xl sm:text-5xl tracking-tight font-bold text-[#1F2924]",
+      "h2": "text-2xl sm:text-3xl tracking-tight font-semibold text-[#1F2924]",
+      "h3": "text-xl sm:text-2xl tracking-tight font-medium text-[#1F2924]",
+      "body": "text-base leading-relaxed text-[#5C6B62]",
+      "label_overline": "text-sm uppercase tracking-[0.2em] font-medium text-[#5C6B62]"
+    }
+  },
+  "layout_and_spacing": {
+    "philosophy": "Generous spacing. Do not cram data. The UI must feel breathable.",
+    "grid_system": "Use 'The Control Room Grid' for dashboard stats. grid-cols-1 md:grid-cols-3 lg:grid-cols-4 with gap-6. Every pixel utilized intentionally.",
+    "container_padding": "p-6 sm:p-8",
+    "border_radius": "rounded-2xl"
+  },
+  "components": {
+    "strategy": "Shadcn UI must be heavily customized. Strip out the 'Vercel-look'. Use flat surfaces, 1px subtle borders (#E5E9E6), and no heavy shadows. Flat solid backgrounds are mandatory for clinical apps to avoid visual refraction of data (no glassmorphism).",
+    "navigation": "Sidebar with Manrope font, clear active states (using #4A5D4E), and a prominent Language Switcher (EN/HI) at the top right.",
+    "forms": "Patient Add/Edit Form using Shadcn Input, Select, Checkbox. Left-aligned labels, clear error states in #C86A58.",
+    "tables": "Patient List with ample row height. Clear typographic hierarchy for medicine names and reminder times. Ensure left alignment for data.",
+    "cards": "Stats cards using flat design with 1px border (#E5E9E6), no shadow by default, and a slight hover lift (-translate-y-1) with subtle shadow-sm."
+  },
+  "accessibility_and_interactions": {
+    "contrast": "Strict adherence to APCA standards. Primary text on surface meets 4.5:1 ratio.",
+    "hover_states": "All interactive elements must explicitly set text color on hover.",
+    "testing": "All interactive elements MUST include data-testid attribute (e.g. data-testid='add-patient-button').",
+    "language": "UI text must support toggling between English and Hindi seamlessly."
+  },
+  "media": {
+    "images": [
+      {
+        "category": "hero",
+        "description": "Login landing page hero background (warm medical clinic environment)",
+        "url": "https://static.prod-images.emergentagent.com/jobs/4e7cf202-bb93-4ac8-9cbf-3975ed74231a/images/383fc0c3f017d0ce6f36d2310795d01d8218de97d00898d1794a2d2abadc0a3d.png"
+      },
+      {
+        "category": "background",
+        "description": "Abstract medical pills (can be used for empty states or generic backgrounds)",
+        "url": "https://static.prod-images.emergentagent.com/jobs/4e7cf202-bb93-4ac8-9cbf-3975ed74231a/images/fa19ea860674024119c5b388b6e8026a41b017896ff13e284d5f14ab8e129f7c.png"
+      },
+      {
+        "category": "portrait",
+        "description": "Friendly doctor portrait for dashboard user avatar",
+        "url": "https://images.unsplash.com/photo-1678940805950-73f2127f9d4e?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA2OTV8MHwxfHNlYXJjaHwyfHxmcmllbmRseSUyMGRvY3RvciUyMHBvcnRyYWl0fGVufDB8fHx8MTc3NjYwNDYxMnww&ixlib=rb-4.1.0&q=85"
+      },
+      {
+        "category": "interior",
+        "description": "Modern waiting room interior for secondary layout graphics",
+        "url": "https://images.unsplash.com/photo-1762625570087-6d98fca29531?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjY2NzV8MHwxfHNlYXJjaHwxfHxtb2Rlcm4lMjBjbGluaWMlMjBpbnRlcmlvcnxlbnwwfHx8fDE3NzY2MDQ2MTF8MA&ixlib=rb-4.1.0&q=85"
+      }
+    ],
+    "icons": {
+      "library": "lucide-react",
+      "style": "Clean, line-based, consistent stroke width."
+    }
+  },
+  "instructions_to_main_agent": [
+    "Strictly adhere to the color palette in tailwind.config.js. Do NOT use default Tailwind blues, teals, or purples.",
+    "Implement language switching (EN/HI) natively or via i18n library. Ensure fonts support Devanagari script gracefully (Work Sans supports it via fallback, but ensure proper rendering).",
+    "Dashboard stats and Patient Lists must be responsive, defaulting to grid-cols-1 on mobile.",
+    "When integrating Shadcn, customize border-radius to match the rounded-2xl theme and use flat borders (#E5E9E6).",
+    "Avoid glassmorphism. Use flat solid backgrounds to ensure clinical data remains perfectly legible.",
+    "You MUST add data-testid attributes to ALL interactive elements (buttons, inputs, language toggles, table rows, etc.)",
+    "Apply Manrope for all Headings (H1-H4) and Work Sans for body text.",
+    "Use the provided image URLs exclusively for media assets."
+  ]
+}
