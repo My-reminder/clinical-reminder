@@ -30,11 +30,12 @@ Build a full-stack clinic reminder web application where clinics/doctors can add
 - [x] Backend: All API endpoints (auth, patients CRUD, reminders upcoming/logs/test, stats)
 - [x] Scheduler: APScheduler lifespan-managed, cron second=0 every minute, deduplicated per day/time/patient
 - [x] Twilio integration with WhatsApp + SMS fallback
-- [x] Frontend: Login page with hero, Dashboard, Patients list+form, Reminders (upcoming/logs tabs)
+- [x] Frontend: Login page with hero, Dashboard, Patients list+form, Reminders (upcoming/logs/adherence tabs)
 - [x] Language switcher (EN/HI) with full UI translations and message templates in both languages
 - [x] Design: Sage-green + bone-white "Organic & Earthy" theme, Manrope headings, Work Sans body
 - [x] data-testid attributes on all interactive elements
 - [x] README with setup, `.env.sample`, deployment instructions
+- [x] **Two-way WhatsApp adherence loop (Feb 2026)**: `/api/webhooks/twilio` receives patient replies, classifies TAKEN/SKIP (EN + HI keywords), auto-acknowledges, stores in `adherence_records`. Dashboard shows adherence rate + recent responses. Reminders page has a new "Adherence" tab with today/7-day rates and response history.
 
 ## Prioritized Backlog
 

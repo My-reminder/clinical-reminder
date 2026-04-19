@@ -2,8 +2,8 @@
 Clinic Reminder Backend - FastAPI
 Features: Google OAuth (Emergent), Patient CRUD, Reminder Engine (APScheduler + Twilio WhatsApp)
 """
-from fastapi import FastAPI, APIRouter, HTTPException, Request, Response, Depends, Cookie
-from fastapi.responses import JSONResponse
+from fastapi import FastAPI, APIRouter, HTTPException, Request, Response, Depends, Cookie, Form
+from fastapi.responses import JSONResponse, Response as FastAPIResponse
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -137,11 +137,13 @@ def build_message(patient: dict, time_str: str) -> str:
     if lang == "hi":
         empty_instr = "कृपया खाली पेट लें।" if empty else "भोजन के साथ ले सकते हैं।"
         dose_txt = f" ({dosage})" if dosage else ""
-        return f"नमस्ते {name}, यह आपकी दवा {medicine}{dose_txt} लेने की याद दिला रहा है। समय: {time_str}। {empty_instr}"
+        reply_prompt = "\n\nकृपया उत्तर दें: *लिया* यदि दवा ले ली है, या *छोड़ा* यदि छोड़ दी।"
+        return f"नमस्ते {name}, यह आपकी दवा {medicine}{dose_txt} लेने की याद दिला रहा है। समय: {time_str}। {empty_instr}{reply_prompt}"
     else:
         empty_instr = "Please take on an empty stomach." if empty else "You may take with food."
         dose_txt = f" ({dosage})" if dosage else ""
-        return f"Hi {name}, this is your reminder to take {medicine}{dose_txt} at {time_str}. {empty_instr}"
+        reply_prompt = "\n\nPlease reply *TAKEN* if you took it, or *SKIP* if you missed it."
+        return f"Hi {name}, this is your reminder to take {medicine}{dose_txt} at {time_str}. {empty_instr}{reply_prompt}"
 
 
 async def send_whatsapp(patient: dict, time_str: str) -> dict:
@@ -188,21 +190,43 @@ async def send_whatsapp(patient: dict, time_str: str) -> dict:
     return result
 
 
-async def log_reminder(owner_id: str, patient: dict, time_str: str, result: dict):
+async def log_reminder(owner_id: str, patient: dict, time_str: str, result: dict) -> str:
+    log_id = f"log_{uuid.uuid4().hex[:12]}"
     doc = {
-        "id": f"log_{uuid.uuid4().hex[:12]}",
+        "id": log_id,
         "owner_id": owner_id,
         "patient_id": patient["id"],
         "patient_name": patient["name"],
         "medicine": patient["medicine"],
+        "patient_phone": patient["phone"],
         "scheduled_time": time_str,
         "sent_at": datetime.now(timezone.utc).isoformat(),
         "status": result["status"],
         "channel": result["channel"],
         "message": result["message"],
         "error": result.get("error"),
+        "adherence_status": None,
     }
     await db.reminder_logs.insert_one(doc)
+    return log_id
+
+
+TAKEN_KEYWORDS = {"taken", "yes", "y", "ok", "done", "took", "त", "लिया", "हाँ", "हां", "जी"}
+SKIPPED_KEYWORDS = {"skip", "skipped", "no", "n", "missed", "miss", "छोड़ा", "छोड़", "नहीं", "नही"}
+
+
+def classify_reply(body: str) -> str:
+    """Return 'taken', 'skipped', or 'unknown' based on message body."""
+    if not body:
+        return "unknown"
+    text = body.strip().lower()
+    # Check exact or containing tokens
+    tokens = set(text.replace(".", " ").replace(",", " ").split())
+    if tokens & TAKEN_KEYWORDS or any(k in text for k in TAKEN_KEYWORDS if len(k) > 2):
+        return "taken"
+    if tokens & SKIPPED_KEYWORDS or any(k in text for k in SKIPPED_KEYWORDS if len(k) > 2):
+        return "skipped"
+    return "unknown"
 
 
 # -------------------- SCHEDULER --------------------
@@ -504,8 +528,121 @@ async def test_reminder(patient_id: str, user: dict = Depends(get_current_user))
     tz = ZoneInfo(SCHEDULER_TZ)
     now_str = datetime.now(tz).strftime("%H:%M")
     result = await send_whatsapp(p, now_str)
-    await log_reminder(user["user_id"], p, now_str, result)
-    return {"status": result["status"], "channel": result["channel"], "error": result.get("error")}
+    log_id = await log_reminder(user["user_id"], p, now_str, result)
+    return {"status": result["status"], "channel": result["channel"], "error": result.get("error"), "log_id": log_id}
+
+
+# -------------------- ADHERENCE (Two-way WhatsApp) --------------------
+@api_router.post("/webhooks/twilio")
+async def twilio_webhook(
+    From: str = Form(""),
+    Body: str = Form(""),
+    To: str = Form(""),
+    MessageSid: str = Form(""),
+):
+    """Twilio inbound webhook. Receives patient replies to reminders.
+    Twilio posts application/x-www-form-urlencoded data. No auth required.
+    Returns empty TwiML (Twilio-compatible)."""
+    phone = From.replace("whatsapp:", "").strip()
+    body_text = (Body or "").strip()
+    logger.info(f"Inbound WhatsApp from {phone}: {body_text!r}")
+
+    if not phone:
+        return FastAPIResponse(content="<Response/>", media_type="application/xml")
+
+    # Find patient by phone
+    patient = await db.patients.find_one({"phone": phone}, {"_id": 0})
+    if not patient:
+        logger.info(f"No patient found for phone {phone}")
+        return FastAPIResponse(content="<Response/>", media_type="application/xml")
+
+    # Find most recent sent reminder log for this patient within last 24h (that has no adherence yet)
+    cutoff = (datetime.now(timezone.utc) - timedelta(hours=24)).isoformat()
+    recent_log = await db.reminder_logs.find_one(
+        {
+            "patient_id": patient["id"],
+            "status": "sent",
+            "sent_at": {"$gte": cutoff},
+            "adherence_status": None,
+        },
+        {"_id": 0},
+        sort=[("sent_at", -1)],
+    )
+
+    status = classify_reply(body_text)
+    record_id = f"adh_{uuid.uuid4().hex[:12]}"
+    record = {
+        "id": record_id,
+        "owner_id": patient["owner_id"],
+        "patient_id": patient["id"],
+        "patient_name": patient["name"],
+        "medicine": patient["medicine"],
+        "phone": phone,
+        "reminder_log_id": recent_log["id"] if recent_log else None,
+        "scheduled_time": recent_log["scheduled_time"] if recent_log else None,
+        "reply_body": body_text,
+        "status": status,  # taken / skipped / unknown
+        "message_sid": MessageSid,
+        "responded_at": datetime.now(timezone.utc).isoformat(),
+    }
+    await db.adherence_records.insert_one(record)
+
+    if recent_log:
+        await db.reminder_logs.update_one(
+            {"id": recent_log["id"]}, {"$set": {"adherence_status": status}}
+        )
+
+    # Auto-reply acknowledgement
+    ack_en = {
+        "taken": "Great! We've logged that you took your medicine. Keep it up! 💚",
+        "skipped": "Got it. We've logged this dose as skipped. Please consult your doctor if this happens often.",
+        "unknown": "Thanks for your reply. Please reply TAKEN or SKIP so we can log your dose.",
+    }
+    ack_hi = {
+        "taken": "बहुत अच्छा! हमने रिकॉर्ड कर लिया कि आपने दवा ले ली है। स्वस्थ रहें!",
+        "skipped": "ठीक है, हमने इसे छोड़ी हुई खुराक के रूप में दर्ज किया है। यदि यह बार-बार हो तो डॉक्टर से सलाह लें।",
+        "unknown": "उत्तर के लिए धन्यवाद। कृपया लिया या छोड़ा लिखें।",
+    }
+    lang = patient.get("language", "en")
+    ack = (ack_hi if lang == "hi" else ack_en)[status]
+    try:
+        if twilio_client and TWILIO_WHATSAPP:
+            twilio_client.messages.create(from_=TWILIO_WHATSAPP, to=f"whatsapp:{phone}", body=ack)
+    except Exception as e:
+        logger.warning(f"Ack send failed: {e}")
+
+    return FastAPIResponse(content="<Response/>", media_type="application/xml")
+
+
+@api_router.get("/adherence")
+async def list_adherence(limit: int = 100, user: dict = Depends(get_current_user)):
+    cursor = (
+        db.adherence_records.find({"owner_id": user["user_id"]}, {"_id": 0})
+        .sort("responded_at", -1)
+        .limit(limit)
+    )
+    return await cursor.to_list(length=limit)
+
+
+@api_router.get("/adherence/stats")
+async def adherence_stats(user: dict = Depends(get_current_user)):
+    """Return 7-day and today adherence rates."""
+    tz = ZoneInfo(SCHEDULER_TZ)
+    now_utc = datetime.now(timezone.utc)
+    today_str = datetime.now(tz).strftime("%Y-%m-%d")
+    week_ago_iso = (now_utc - timedelta(days=7)).isoformat()
+
+    async def _rate(query: dict):
+        taken = await db.adherence_records.count_documents({**query, "status": "taken"})
+        skipped = await db.adherence_records.count_documents({**query, "status": "skipped"})
+        unknown = await db.adherence_records.count_documents({**query, "status": "unknown"})
+        total = taken + skipped + unknown
+        rate = round((taken / total) * 100) if total else None
+        return {"taken": taken, "skipped": skipped, "unknown": unknown, "total": total, "rate": rate}
+
+    today = await _rate({"owner_id": user["user_id"], "responded_at": {"$regex": f"^{today_str}"}})
+    week = await _rate({"owner_id": user["user_id"], "responded_at": {"$gte": week_ago_iso}})
+    return {"today": today, "last_7_days": week}
 
 
 # -------------------- STATS --------------------
@@ -538,12 +675,29 @@ async def stats(user: dict = Depends(get_current_user)):
             continue
         total_scheduled_today += len(p.get("reminder_times", []))
 
+    # Adherence today
+    taken_today = await db.adherence_records.count_documents({
+        "owner_id": user["user_id"],
+        "status": "taken",
+        "responded_at": {"$regex": f"^{today_str}"},
+    })
+    skipped_today = await db.adherence_records.count_documents({
+        "owner_id": user["user_id"],
+        "status": "skipped",
+        "responded_at": {"$regex": f"^{today_str}"},
+    })
+    adherence_total = taken_today + skipped_today
+    adherence_rate = round((taken_today / adherence_total) * 100) if adherence_total else None
+
     return {
         "total_patients": total_patients,
         "active_patients": active_patients,
         "reminders_sent_today": sent_today,
         "reminders_failed_today": failed_today,
         "reminders_scheduled_today": total_scheduled_today,
+        "adherence_taken_today": taken_today,
+        "adherence_skipped_today": skipped_today,
+        "adherence_rate_today": adherence_rate,
     }
 
 

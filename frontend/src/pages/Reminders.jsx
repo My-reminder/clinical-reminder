@@ -3,21 +3,30 @@ import Layout from "../components/Layout";
 import { useApp } from "../context/AppContext";
 import { api } from "../lib/api";
 import { format, parseISO } from "date-fns";
-import { CheckCircle2, XCircle, MessageCircle, Phone, Clock, CalendarClock, Pill } from "lucide-react";
+import { CheckCircle2, XCircle, MessageCircle, Phone, Clock, CalendarClock, Pill, HeartPulse, MessageSquare } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "../components/ui/tabs";
 
 const Reminders = () => {
   const { t } = useApp();
   const [logs, setLogs] = useState([]);
   const [upcoming, setUpcoming] = useState([]);
+  const [adherence, setAdherence] = useState([]);
+  const [adhStats, setAdhStats] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     (async () => {
       try {
-        const [l, u] = await Promise.all([api.get("/reminders/logs?limit=200"), api.get("/reminders/upcoming")]);
+        const [l, u, a, s] = await Promise.all([
+          api.get("/reminders/logs?limit=200"),
+          api.get("/reminders/upcoming"),
+          api.get("/adherence?limit=200"),
+          api.get("/adherence/stats"),
+        ]);
         setLogs(l.data);
         setUpcoming(u.data);
+        setAdherence(a.data);
+        setAdhStats(s.data);
       } catch (e) {
         console.error(e);
       } finally {
@@ -43,6 +52,9 @@ const Reminders = () => {
             </TabsTrigger>
             <TabsTrigger data-testid="tab-logs" value="logs" className="rounded-lg data-[state=active]:bg-clinic-surface data-[state=active]:text-clinic-text">
               {t("reminder_logs")}
+            </TabsTrigger>
+            <TabsTrigger data-testid="tab-adherence" value="adherence" className="rounded-lg data-[state=active]:bg-clinic-surface data-[state=active]:text-clinic-text">
+              {t("adherence")}
             </TabsTrigger>
           </TabsList>
 
@@ -130,6 +142,98 @@ const Reminders = () => {
                           {l.error && (
                             <div className="text-xs text-clinic-warning mt-1.5">{l.error}</div>
                           )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </TabsContent>
+
+          <TabsContent value="adherence">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+              <div className="bg-clinic-surface border border-clinic-border rounded-2xl p-6">
+                <div className="flex items-center gap-2 mb-3">
+                  <HeartPulse className="w-5 h-5 text-clinic-primary" />
+                  <div className="text-sm uppercase tracking-[0.15em] text-clinic-muted font-medium">Today</div>
+                </div>
+                <div className="font-heading text-4xl font-bold text-clinic-text">
+                  {adhStats?.today?.rate != null ? `${adhStats.today.rate}%` : "—"}
+                </div>
+                <div className="text-xs text-clinic-muted mt-1">
+                  {adhStats?.today?.total || 0} {t("responded")}
+                </div>
+              </div>
+              <div className="bg-clinic-surface border border-clinic-border rounded-2xl p-6">
+                <div className="flex items-center gap-2 mb-3">
+                  <CalendarClock className="w-5 h-5 text-clinic-primary" />
+                  <div className="text-sm uppercase tracking-[0.15em] text-clinic-muted font-medium">7 Days</div>
+                </div>
+                <div className="font-heading text-4xl font-bold text-clinic-text">
+                  {adhStats?.last_7_days?.rate != null ? `${adhStats.last_7_days.rate}%` : "—"}
+                </div>
+                <div className="text-xs text-clinic-muted mt-1">
+                  {adhStats?.last_7_days?.total || 0} {t("responded")}
+                </div>
+              </div>
+              <div className="bg-clinic-tint/50 border border-clinic-border rounded-2xl p-6">
+                <div className="text-xs text-clinic-text leading-relaxed">
+                  💬 {t("adherence_tip")}
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-clinic-surface border border-clinic-border rounded-2xl overflow-hidden">
+              {loading ? (
+                <div className="p-10 text-center text-clinic-muted text-sm">Loading...</div>
+              ) : adherence.length === 0 ? (
+                <div className="p-16 text-center">
+                  <div className="w-14 h-14 mx-auto rounded-2xl bg-clinic-tint flex items-center justify-center mb-4">
+                    <MessageSquare className="w-6 h-6 text-clinic-muted" />
+                  </div>
+                  <div className="text-clinic-muted text-sm max-w-sm mx-auto" data-testid="no-adherence">{t("no_adherence")}</div>
+                </div>
+              ) : (
+                <div className="divide-y divide-clinic-border">
+                  {adherence.map((a) => {
+                    const Ic =
+                      a.status === "taken" ? CheckCircle2 : a.status === "skipped" ? XCircle : MessageSquare;
+                    const color =
+                      a.status === "taken"
+                        ? "bg-clinic-tint text-clinic-primary"
+                        : a.status === "skipped"
+                        ? "bg-[#FBEAE6] text-clinic-warning"
+                        : "bg-clinic-border text-clinic-muted";
+                    return (
+                      <div key={a.id} className="p-5 flex items-start gap-4" data-testid={`adherence-${a.id}`}>
+                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${color}`}>
+                          <Ic className="w-5 h-5" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <div className="font-medium text-clinic-text">{a.patient_name}</div>
+                            <span className="text-xs text-clinic-muted">·</span>
+                            <div className="text-sm text-clinic-muted">{a.medicine}</div>
+                            <span
+                              className={`text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-full ${
+                                a.status === "taken"
+                                  ? "bg-clinic-tint text-clinic-primary"
+                                  : a.status === "skipped"
+                                  ? "bg-[#FBEAE6] text-clinic-warning"
+                                  : "bg-clinic-border text-clinic-muted"
+                              }`}
+                            >
+                              {t(a.status === "taken" ? "taken" : a.status === "skipped" ? "skipped" : "unknown_reply")}
+                            </span>
+                          </div>
+                          <div className="text-xs text-clinic-muted mt-1">
+                            {format(parseISO(a.responded_at), "MMM d, HH:mm:ss")}
+                            {a.scheduled_time && ` · ${t("at")} ${a.scheduled_time}`}
+                          </div>
+                          <div className="text-xs text-clinic-text mt-2 bg-clinic-bg rounded-md p-2 border border-clinic-border italic">
+                            "{a.reply_body}"
+                          </div>
                         </div>
                       </div>
                     );
