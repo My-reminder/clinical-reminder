@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import Layout from "../components/Layout";
 import { useApp } from "../context/AppContext";
 import { api } from "../lib/api";
@@ -33,7 +33,7 @@ const Dashboard = () => {
   const [adherence, setAdherence] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  const load = async () => {
+  const load = useCallback(async () => {
     try {
       const [s, u, a] = await Promise.all([
         api.get("/stats"),
@@ -43,12 +43,16 @@ const Dashboard = () => {
       setStats(s.data);
       setUpcoming(u.data);
       setAdherence(a.data);
-    } catch (e) {
-      console.error(e);
+    } catch (err) {
+      // Fail silently — user can refresh; error surfaced via empty states.
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    load();
+  }, [load]);
 
   useEffect(() => {
     load();
@@ -102,8 +106,8 @@ const Dashboard = () => {
               <div className="p-10 text-center text-clinic-muted text-sm" data-testid="no-upcoming">{t("no_upcoming")}</div>
             ) : (
               <div className="divide-y divide-clinic-border">
-                {upcoming.slice(0, 8).map((r, i) => (
-                  <div key={i} data-testid={`upcoming-item-${i}`} className="p-5 flex items-center gap-4 hover:bg-clinic-tint/40 transition">
+                {upcoming.slice(0, 8).map((r) => (
+                  <div key={`${r.patient_id}-${r.when_iso}`} data-testid={`upcoming-item-${r.patient_id}-${r.scheduled_time}`} className="p-5 flex items-center gap-4 hover:bg-clinic-tint/40 transition">
                     <div className="w-11 h-11 rounded-xl bg-clinic-tint flex items-center justify-center flex-shrink-0">
                       <Pill className="w-5 h-5 text-clinic-primary" />
                     </div>

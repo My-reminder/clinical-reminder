@@ -39,7 +39,9 @@ export const AppProvider = ({ children }) => {
   const logout = async () => {
     try {
       await api.post("/auth/logout");
-    } catch (e) {}
+    } catch (err) {
+      console.error("Logout failed:", err);
+    }
     setUser(null);
     window.location.href = "/";
   };

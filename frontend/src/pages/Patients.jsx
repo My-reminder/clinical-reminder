@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import Layout from "../components/Layout";
 import { useApp } from "../context/AppContext";
 import { api } from "../lib/api";
@@ -27,21 +27,21 @@ const Patients = () => {
   const [editing, setEditing] = useState(null);
   const [confirmDelete, setConfirmDelete] = useState(null);
 
-  const load = async () => {
+  const load = useCallback(async () => {
     setLoading(true);
     try {
       const res = await api.get("/patients");
       setPatients(res.data);
-    } catch (e) {
+    } catch (err) {
       toast.error(t("error"));
     } finally {
       setLoading(false);
     }
-  };
+  }, [t]);
 
   useEffect(() => {
     load();
-  }, []);
+  }, [load]);
 
   const handleDelete = async () => {
     if (!confirmDelete) return;
@@ -158,9 +158,9 @@ const Patients = () => {
                   <div className="flex items-start gap-2 text-sm text-clinic-muted">
                     <Clock className="w-4 h-4 flex-shrink-0 mt-0.5" />
                     <div className="flex flex-wrap gap-1">
-                      {p.reminder_times.map((t, i) => (
-                        <span key={i} className="px-2 py-0.5 bg-clinic-tint rounded-md text-xs font-medium text-clinic-text">
-                          {t}
+                      {p.reminder_times.map((tm) => (
+                        <span key={`${p.id}-${tm}`} className="px-2 py-0.5 bg-clinic-tint rounded-md text-xs font-medium text-clinic-text">
+                          {tm}
                         </span>
                       ))}
                     </div>

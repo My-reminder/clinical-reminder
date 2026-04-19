@@ -4,8 +4,8 @@ import pytest
 import requests
 
 BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "https://clinic-reminder-2.preview.emergentagent.com").rstrip("/")
-TOKEN = "test_session_ci_1"
-USER_ID = "test-user-ci-1"
+TOKEN = os.environ.get("CLINICPULSE_TEST_TOKEN", "test_session_ci_1")
+USER_ID = os.environ.get("CLINICPULSE_TEST_USER_ID", "test-user-ci-1")
 AUTH = {"Authorization": f"Bearer {TOKEN}"}
 
 

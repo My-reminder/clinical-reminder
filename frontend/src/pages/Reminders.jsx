@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import Layout from "../components/Layout";
 import { useApp } from "../context/AppContext";
 import { api } from "../lib/api";
@@ -14,26 +14,28 @@ const Reminders = () => {
   const [adhStats, setAdhStats] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    (async () => {
-      try {
-        const [l, u, a, s] = await Promise.all([
-          api.get("/reminders/logs?limit=200"),
-          api.get("/reminders/upcoming"),
-          api.get("/adherence?limit=200"),
-          api.get("/adherence/stats"),
-        ]);
-        setLogs(l.data);
-        setUpcoming(u.data);
-        setAdherence(a.data);
-        setAdhStats(s.data);
-      } catch (e) {
-        console.error(e);
-      } finally {
-        setLoading(false);
-      }
-    })();
+  const load = useCallback(async () => {
+    try {
+      const [l, u, a, s] = await Promise.all([
+        api.get("/reminders/logs?limit=200"),
+        api.get("/reminders/upcoming"),
+        api.get("/adherence?limit=200"),
+        api.get("/adherence/stats"),
+      ]);
+      setLogs(l.data);
+      setUpcoming(u.data);
+      setAdherence(a.data);
+      setAdhStats(s.data);
+    } catch (err) {
+      // Fail silently — empty state handles it.
+    } finally {
+      setLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    load();
+  }, [load]);
 
   return (
     <Layout>
@@ -105,10 +107,10 @@ const Reminders = () => {
                 </div>
               ) : (
                 <div className="divide-y divide-clinic-border">
-                  {logs.map((l, i) => {
+                  {logs.map((l) => {
                     const sent = l.status === "sent";
                     return (
-                      <div key={l.id} className="p-5 flex items-start gap-4" data-testid={`log-${i}`}>
+                      <div key={l.id} className="p-5 flex items-start gap-4" data-testid={`log-${l.id}`}>
                         <div
                           className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${
                             sent ? "bg-clinic-tint text-clinic-primary" : "bg-[#FBEAE6] text-clinic-warning"
